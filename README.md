@@ -1,273 +1,425 @@
-# AURA — Voice-First Personal Productivity Assistant
+# AURA — Voice-First Productivity Assistant
 
-> *"Speak naturally. Get things done."*
+AURA is a real-time voice-first productivity assistant built with **Python, FastAPI, WebSockets, React, TypeScript, Gemini, Deepgram, Edge-TTS, SQLite, and Open-Meteo**.
 
-AURA is a voice-first personal productivity assistant built with Python (FastAPI, AsyncIO, WebSockets, SQLAlchemy) and React + TypeScript. AURA allows users to interact naturally through speech, check real-time weather, save notes, schedule reminders, and receive spoken responses in real time.
+It is designed around a natural voice interaction loop: speak to AURA, let it understand the request, execute a real tool when needed, and receive the response through streaming audio.
 
----
+## ✨ Features
 
-## 🌟 Overview
+- 🎙️ Real-time voice interaction over WebSockets
+- 🧠 Gemini-powered conversational agent
+- 🌦️ Live weather for dynamically requested locations
+- 📝 Persistent notes with SQLite
+- ⏰ Persistent reminders with natural date/time parsing
+- 🔊 Streaming text-to-speech with Edge-TTS
+- 🛑 Barge-in / voice interruption support
+- 📡 Streaming speech-to-text with Deepgram
+- 💾 Conversation persistence
+- ⚡ Runtime latency metrics
+- 🖥️ Modern SaaS-style React dashboard
+- 🧪 Automated backend tests and final QA verification
 
-AURA turns natural speech into productive action. Rather than feeling like a generic AI chatbot or futuristic sci-fi widget, AURA is engineered as a practical SaaS productivity application.
+## 🏗️ Architecture
 
----
-
-## 🚀 Features
-
-- 🎤 **Real-Time Voice Interaction**: Streaming microphone capture (PCM 16-bit Mono @ 16kHz) over WebSockets.
-- 🤖 **LLM Tool Calling & Routing**: Dynamic execution of real-world tools for weather, notes, and reminders.
-- 🔊 **Streaming Text-to-Speech (TTS)**: Neural spoken audio responses using `Edge-TTS` (keyless out-of-the-box streaming) or ElevenLabs.
-- ⚡ **User Interruption / Barge-in**: Instantly halts assistant audio playback in `< 50ms` and cancels backend AsyncIO tasks when user speaks.
-- 📝 **Persistent SQLite Storage**: Async SQLAlchemy database for notes, reminders, and conversation memory.
-- 📊 **Developer Mode & Performance Metrics**: Real-time display of observed empirical runtime latencies.
-- 💻 **Modern SaaS UI**: Clean dark glassmorphism dashboard built with React 18, TypeScript, and Tailwind CSS.
-
----
-
-## 🏗 System Architecture
-
-```
-                      ┌─────────────────────────┐
-                      │     React Frontend      │
-                      │ (WebAudio PCM16 + WS)   │
-                      └───────────┬─────────────┘
-                                  │
-                                  │ WebSocket (PCM16 16kHz & JSON)
-                                  ▼
-                      ┌─────────────────────────┐
-                      │  FastAPI WebSocket API  │
-                      │  (voice_handler.py)     │
-                      └───────────┬─────────────┘
-                                  │
-            ┌─────────────────────┼─────────────────────┐
-            ▼                     ▼                     ▼
-  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐
-  │ STT Engine       │  │ LLM Agent Router │  │ BaseTTSService   │
-  │ (Deepgram Stream)│  │ (Gemini Flash /  │  │ ├── EdgeTTS      │
-  │ / WebSpeech API  │  │  Tool Executor)  │  │ └── ElevenLabs   │
-  └──────────────────┘  └─────────┬────────┘  └──────────────────┘
-                                  │
-                      ┌───────────┴───────────┐
-                      ▼                       ▼
-            ┌───────────────────┐   ┌───────────────────┐
-            │ Real-World Tools  │   │ Persistent Storage│
-            │ ├── Weather API   │   │ (SQLite Async     │
-            │ ├── Notes Tool    │   │  SQLAlchemy ORM)  │
-            │ └── Reminder Tool │   └───────────────────┘
-            └───────────────────┘
+```text
+Browser Microphone
+       │
+       ▼
+  PCM16 / 16kHz
+       │
+       ▼
+ WebSocket /ws/voice
+       │
+       ▼
+ Python FastAPI
+       │
+       ├── Deepgram STT
+       │
+       ├── Gemini Agent
+       │      │
+       │      ├── Weather Tool ──► Open-Meteo
+       │      ├── Notes Tool ────► SQLite
+       │      └── Reminder Tool ─► SQLite
+       │
+       └── Edge-TTS
+              │
+              ▼
+        WebSocket Audio
+              │
+              ▼
+       Browser WebAudio
+              │
+              ▼
+            Speaker
 ```
 
----
+## 🔄 Voice Pipeline
 
-## 🛠 Available Tools
+1. Browser captures microphone audio.
+2. Audio is converted to PCM16 mono at 16 kHz.
+3. Audio chunks are streamed through WebSocket.
+4. Deepgram produces partial and final transcripts.
+5. The final transcript is passed to the Gemini agent.
+6. Gemini decides whether a tool is required.
+7. Tools execute against live services or SQLite.
+8. The final response is sent to the TTS layer.
+9. TTS audio is streamed back through WebSocket.
+10. Browser WebAudio plays the response.
+11. User speech during playback can trigger a controlled interruption.
 
-### 1. Weather Tool (`get_weather`)
-- **Function**: `get_weather(location)`
-- **Integration**: Queries Open-Meteo Geocoding and Forecast REST APIs for current temperature, condition, and wind speed.
+## 🛠️ Tech Stack
 
-### 2. Notes Tool (`create_note`, `list_notes`)
-- **Functions**: `create_note(content)`, `list_notes()`
-- **Integration**: Persists notes in SQLite database with creation timestamps and REST API endpoints.
+### Backend
 
-### 3. Reminders Tool (`create_reminder`, `list_reminders`)
-- **Functions**: `create_reminder(title, datetime_str)`, `list_reminders()`
-- **Integration**: Parses natural date/time strings (e.g. *"tomorrow at 8 PM"*, *"in 2 hours"*) using `dateparser` and persists entries in SQLite.
+- Python
+- FastAPI
+- Uvicorn
+- WebSockets
+- SQLAlchemy
+- aiosqlite
+- Pydantic
+- pytest
+- Ruff
+- Black
 
----
+### AI / Speech
 
-## ⚡ User Interruption / Barge-In
-
-When AURA is speaking and the user begins speaking or taps "Interrupt AURA":
-1. Frontend WebAudio context halts playback queue instantly (`< 50ms`).
-2. Client emits `{"type": "interrupt"}` over WebSocket.
-3. FastAPI server cancels the active Python `asyncio.Task` executing text generation/TTS streaming.
-4. System state transitions to `LISTENING`, ready for the next command.
-
----
-
-## 💻 Tech Stack
-
-### Backend (Python-First)
-- **Python**: 3.11+
-- **Framework**: FastAPI + Uvicorn
-- **Protocol**: WebSockets + AsyncIO
-- **AI Agent**: `google-genai` (Gemini 2.5 Flash / 1.5 Flash) with fallback local tool engine
-- **STT Engine**: Deepgram Live Streaming API (`deepgram-sdk`) + WebSpeech streaming bridge
-- **TTS Engine**: `edge-tts` (Microsoft Neural Voices - zero API key required) / ElevenLabs
-- **Database**: SQLite + SQLAlchemy 2.0 AsyncIO + `aiosqlite`
-- **Testing & Quality**: `pytest`, `pytest-asyncio`, `ruff`, `black`, `mypy`
+- Google Gemini (`google-genai`)
+- Deepgram Streaming STT
+- Edge-TTS
+- Optional browser Web Speech fallback for development
 
 ### Frontend
-- **Framework**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS
-- **Icons**: Lucide React
-- **Audio Capture**: WebAudio API (PCM16 16kHz Mono)
 
----
+- React
+- TypeScript
+- Vite
+- Tailwind CSS
+- WebAudio API
+
+### External Data
+
+- Open-Meteo for live weather and geocoding
+
+## 🌦️ Live Weather
+
+Weather requests use the location extracted from the user's actual request.
+
+Examples:
+
+```text
+What's the weather in Pune?
+What's the weather in Mumbai?
+What's the weather in Solapur?
+What's the weather in Delhi?
+What's the weather in London?
+```
+
+The requested location is passed dynamically to the weather tool and resolved through Open-Meteo.
+
+## 📝 Notes
+
+AURA can create and retrieve persistent notes.
+
+Example:
+
+```text
+"Create a note saying I need to prepare for my AI interview."
+```
+
+The intended note content is extracted and stored in SQLite without the command prefix.
+
+Example stored content:
+
+```text
+I need to prepare for my AI interview.
+```
+
+## ⏰ Reminders
+
+AURA supports natural-language reminders.
+
+Example:
+
+```text
+"Remind me to study Python tomorrow at 8 PM."
+```
+
+Reminders are stored persistently in SQLite and can be listed through voice or the dashboard.
+
+## 🛑 Barge-in
+
+AURA supports interruption while the assistant is speaking.
+
+When genuine user speech is detected during playback:
+
+```text
+User Speech
+    ↓
+Speech Activity Detection
+    ↓
+Interrupt
+    ↓
+Stop Browser Playback
+    ↓
+Cancel Active Backend Task
+    ↓
+LISTENING
+```
+
+The implementation also uses browser audio constraints and guards against repeated false interruption events.
+
+## ⚡ Runtime Metrics
+
+The application records empirical runtime measurements rather than presenting hardcoded performance claims.
+
+Available metrics include:
+
+- LLM time-to-first-token
+- Tool execution time
+- TTS first-audio timing
+- Total request latency
+
+The metrics panel is available from the application header.
 
 ## 📁 Project Structure
 
-```
-aura-realtime-voice-assistant/
+```text
+aura-voice-assistant/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py                   # FastAPI application entrypoint
-│   │   ├── api/                      # REST endpoints for Notes & Reminders
-│   │   ├── websocket/
-│   │   │   ├── manager.py            # WebSocket connection manager
-│   │   │   └── voice_handler.py      # Real-time voice orchestrator & barge-in controller
 │   │   ├── agent/
-│   │   │   ├── agent.py              # LLM Agent engine & tool function router
-│   │   │   ├── prompts.py            # System prompts
-│   │   │   └── schemas.py            # Agent Pydantic schemas
-│   │   ├── services/
-│   │   │   ├── stt/                  # Deepgram STT service
-│   │   │   └── tts/                  # Edge-TTS / ElevenLabs service wrapper
-│   │   ├── tools/
-│   │   │   ├── base.py               # Tool registry interface
-│   │   │   ├── weather.py            # Open-Meteo live weather tool
-│   │   │   ├── reminders.py          # SQLite Reminders tool
-│   │   │   └── notes.py              # SQLite Notes tool
+│   │   ├── api/
+│   │   ├── config/
 │   │   ├── database/
-│   │   │   ├── database.py           # Async engine & sessionmaker
-│   │   │   ├── models.py             # SQLAlchemy models
-│   │   │   └── repository.py         # Async repositories
-│   │   └── config/
-│   │       └── settings.py           # Pydantic Settings & env configuration
-│   └── tests/                        # Pytest suite & runtime verification
+│   │   ├── services/
+│   │   │   ├── llm/
+│   │   │   ├── stt/
+│   │   │   └── tts/
+│   │   ├── tools/
+│   │   ├── utils/
+│   │   └── websocket/
+│   ├── tests/
+│   ├── requirements.txt
+│   └── pyproject.toml
+│
 ├── frontend/
 │   ├── src/
-│   │   ├── components/               # Header, VoiceVisualizer, LiveTranscript, ActivityFeed, Notes, Reminders
-│   │   ├── hooks/                    # useVoiceAssistant, useAudioPlayback
-│   │   ├── services/                 # WebSocket client
-│   │   ├── types/                    # TypeScript interfaces
-│   │   ├── App.tsx
-│   │   └── main.tsx
 │   ├── package.json
 │   └── vite.config.ts
+│
 ├── docs/
-│   └── architecture.md               # Detailed architecture & interruption spec
-├── .env.example
-├── .gitignore
+│   └── architecture.md
+│
 ├── Dockerfile
 ├── docker-compose.yml
+├── .env.example
+├── .gitignore
 └── README.md
 ```
 
----
+## 🚀 Local Setup
 
-## 🔑 Environment Variables
+### 1. Clone the repository
 
-Copy `.env.example` to create your local `.env`:
-
-```ini
-HOST=0.0.0.0
-PORT=8000
-DEBUG=True
-LOG_LEVEL=INFO
-
-# AI & LLM Settings
-GEMINI_API_KEY=your_gemini_api_key_here
-LLM_MODEL=gemini-2.5-flash
-
-# Speech-to-Text
-DEEPGRAM_API_KEY=your_deepgram_api_key_here
-
-# Text-to-Speech (edge-tts is default keyless; optional ElevenLabs key below)
-TTS_PROVIDER=edge
-ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
-
-# Database
-DATABASE_URL=sqlite+aiosqlite:///./aura.db
+```bash
+git clone https://github.com/vivekkeskar/aura-voice-assistant.git
+cd aura-voice-assistant
 ```
 
----
+### 2. Backend setup
 
-## ⚙️ Installation & Running Locally
-
-### 1. Backend Setup
 ```bash
 cd backend
-
-# Create virtual environment
 python3 -m venv .venv
-
-# Activate virtual environment
-# macOS/Linux:
 source .venv/bin/activate
-# Windows:
-# .venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
+```
 
-# Start backend server
+### 3. Environment variables
+
+Create a local `.env` file from the example:
+
+```bash
+cp .env.example .env
+```
+
+Add the required API credentials to `.env`.
+
+**Never commit `.env` or API keys to GitHub.**
+
+### 4. Start the backend
+
+From the `backend` directory:
+
+```bash
 uvicorn app.main:app --reload --port 8000
 ```
 
-### 2. Frontend Setup
+Backend:
+
+```text
+http://localhost:8000
+```
+
+### 5. Start the frontend
+
+Open another terminal:
+
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start frontend dev server
 npm run dev
 ```
-Open `http://localhost:3000` in your browser.
 
----
+Vite will display the local frontend URL.
 
-## 🧪 Testing & Code Quality
+Usually:
 
-Run backend pytest test suite:
+```text
+http://localhost:3000
+```
+
+If port 3000 is already occupied, Vite will automatically use another available port.
+
+## 🔐 Environment Variables
+
+Use `.env.example` as the configuration reference.
+
+Keep real credentials only in your local `.env` file.
+
+Integrations include credentials for:
+
+- Gemini
+- Deepgram
+- Optional ElevenLabs configuration
+
+## 🧪 Testing
+
+### Backend tests
+
 ```bash
 cd backend
-source .venv/bin/activate
 pytest -v
 ```
 
-Run code formatting & linting checks:
+### Code quality
+
 ```bash
-cd backend
-source .venv/bin/activate
 ruff check app tests
 black --check app tests
 ```
 
-Build frontend production bundle:
+### Frontend production build
+
 ```bash
 cd frontend
 npm run build
 ```
 
----
+### Verified Results
 
-## 📊 Performance
+- **Pytest:** 8/8 passed
+- **Ruff:** 0 errors
+- **Black:** clean
+- **Frontend production build:** passed
+- **Functional QA:** 8/8 passed
+- **Security checks:** passed
 
-During local runtime testing, observed end-to-end latency metrics were recorded as follows:
-- **LLM Time-to-First-Token**: `~0.008s - 0.015s`
-- **TTS Time-to-First-Audio-Byte**: `~0.78s - 0.86s`
-- **Total Pipeline Latency**: `~1.07s - 2.86s` (depending on network conditions and whether external weather geocoding APIs were called).
+## 📚 Documentation
 
-*Note: Metrics are measured empirically at runtime and displayed in Developer Mode in the frontend UI.*
+Detailed architecture documentation is available at:
 
----
+```text
+docs/architecture.md
+```
 
-## ⚠️ Known Limitations
+It covers:
 
-- **Microphone Permissions**: Browser requires explicit microphone permission on initial launch.
-- **External Network Dependency**: Weather tools query Open-Meteo live APIs and require internet connectivity.
+- Frontend/backend architecture
+- PCM16 16kHz audio specification
+- WebSocket protocol
+- STT/TTS service isolation
+- Database design
+- Tool execution
+- Barge-in handling
+- Runtime latency tracking
 
----
+## 🎯 Engineering Highlights
 
-## 🔮 Future Improvements
+AURA focuses on practical real-time engineering rather than a static chatbot demo.
 
-- Multi-language spoken synthesis support.
-- Local Whisper STT model fallback for full offline capability.
+### Real-time communication
 
----
+Uses WebSockets for bidirectional communication between the browser and Python backend.
+
+### Streaming speech pipeline
+
+Microphone audio is streamed to STT and assistant audio is streamed back to the browser.
+
+### Tool calling
+
+The Gemini agent can dynamically invoke tools for:
+
+- Weather
+- Notes
+- Reminders
+
+### Persistent storage
+
+Notes, reminders, conversations, and messages are persisted using SQLite.
+
+### Interruption handling
+
+Active assistant generation and browser playback can be cancelled when the user interrupts.
+
+### Runtime observability
+
+The application records empirical latency metrics for the voice pipeline.
+
+### Testing
+
+Backend tools, agent behavior, database interactions, and final functional flows are covered by automated tests.
+
+## ⚠️ Limitations
+
+- Deepgram requires an API key for the primary streaming STT path.
+- Browser Web Speech is available as a development fallback when configured.
+- Voice quality and latency can vary depending on network conditions, external APIs, browser audio behavior, and the selected TTS voice.
+- The application is currently intended for local development and portfolio demonstration.
+
+## 🔒 Security
+
+The repository is configured to keep sensitive and runtime files out of Git:
+
+```text
+.env
+.venv/
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+node_modules/
+dist/
+__pycache__/
+*.pyc
+```
+
+Only `.env.example` is committed as the configuration template.
+
+## 📌 Future Improvements
+
+Potential future improvements include:
+
+- Authentication and multi-user accounts
+- Cloud database support
+- Production deployment
+- Additional productivity tools
+- More advanced voice activity detection
+- Improved observability and tracing
+- Mobile client
+- Calendar integration
 
 ## 📄 License
-MIT License.
+
+Add the license you prefer before distributing the project publicly.
