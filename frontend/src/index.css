@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-950 text-slate-100 min-h-screen overflow-x-hidden;
+}
+
+/* Glassmorphism SaaS Card Styles */
+.glass-panel {
+  @apply bg-slate-900/80 backdrop-blur-md border border-slate-800/80 rounded-2xl shadow-xl transition-all duration-200;
+}
+
+.glass-panel-hover {
+  @apply hover:border-slate-700/80 hover:bg-slate-900/90;
+}
+
+/* Custom visual pulse animation */
+@keyframes pulse-subtle {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s infinite ease-in-out;
+}
